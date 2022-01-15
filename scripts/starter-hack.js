@@ -1,40 +1,82 @@
 /** @param {NS} ns **/
 export async function main(ns) {
 
-	let target = ns.args[0];
+	if (ns.args.length < 3) {
+		ns.alert("This script takes 3 arguments. a target. a float for $ percentage and an int for security level");
+	}
+
+	const target = ns.args[0];
 	ns.print(`Starting hack on ${target}`);
 
-	//75% of the servers max money
-	let moneyThreshold = ns.getServerMaxMoney(target) * 0.75;
+	const moneyPercent = parseFloat(ns.args[1]);
+	const securityAddition = parseInt(ns.args[2]);
 
-	// 5 levels above the minimum
-	let securityThreshold = ns.getServerMinSecurityLevel(target) + 5;
+	//x% of the current servers money
+	const moneyThreshold = ns.getServerMaxMoney(target) * moneyPercent;
+
+	// x levels above the minimum
+	const securityThreshold = ns.getServerMinSecurityLevel(target) + securityAddition;
 
 	if (ns.fileExists('BruteSSH.exe', 'home')) {
 		ns.print('Running BruteSSH.exe');
 		ns.brutessh(target);
 	}
 
-	let hasRoot = ns.hasRootAccess(target);
+	const hasRoot = ns.hasRootAccess(target);
 	if (!hasRoot) {
 		ns.print('running nuke for root access!');
 		ns.nuke(target);
 	}
 
 	while (true) {
-		let securityLevel = ns.getServerSecurityLevel(target);
-		let moneyAvailable = ns.getServerMoneyAvailable(target);
 
-		if (securityLevel > securityThreshold) {
-			ns.print(`security level [${securityLevel}] higher than our threshold of [${securityThreshold}]. Weaken.\n`)
-			await ns.weaken(target);
-		} else if (moneyAvailable < moneyThreshold) {
-			ns.print(`Cash on hand /$${moneyAvailable} is less than our threshold \$${moneyThreshold}. Grow.\n`)
-			await ns.grow(target);
-		} else {
-			ns.print("all conditions met. commence the hackering! \n");
-			await ns.hack(target);
+		const securityLevel = ns.getServerSecurityLevel(target);
+		const moneyAvailable = ns.getServerMoneyAvailable(target);
+
+		if (moneyAvailable < moneyThreshold) {
+			await growUntil(ns, target, moneyThreshold);
 		}
 
+		if (securityLevel > securityThreshold) {
+			await weakenUntil(ns, target, securityThreshold);
+		}
+
+		ns.print('all conditons met. commence the hacerking \n');
+		await ns.hack(target);
 	}
+}
+
+/** @param {NS} ns **/
+async function growUntil(ns, target, threshold) {
+	const current = ns.getServerMoneyAvailable(target);
+	const difference = threshold - current;
+	ns.print(`there is a \$${difference} between the current funds and the threshold.`);
+
+	const runs = ns.growthAnalyze(target, difference, 1);
+	ns.print(`Its going to take [${runs}] to get to our threshold`);
+
+	let currentRun = 0;
+	while (currentRun < runs) {
+		ns.print(`Growth round [${currentRun}]`);
+		await ns.grow(target);
+		currentRun++;
+	}
+	ns.print("\n");
+}
+
+/** @param {NS} ns **/
+async function weakenUntil(ns, server, threshold) {
+	let current = ns.getServerSecurityLevel(server);
+
+	let runs = 0;
+	while (current > threshold) {
+		const differnce = current - threshold;
+		ns.print(`There is a [${differnce}] in the current security level and our threshold.]`);
+		await ns.weaken(server);
+
+		current = ns.getServerSecurityLevel(server);
+		runs++;
+	}
+
+	ns.print(`It took [${runs}] to weaken this server!\n`);
 }
